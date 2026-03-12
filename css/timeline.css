@@ -1,0 +1,114 @@
+/* ===== D3 Timeline Styles ===== */
+.timeline-bar {
+  fill: var(--accent-blue);
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.timeline-bar:hover {
+  opacity: 1;
+}
+
+.timeline-event-marker {
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.timeline-event-marker:hover {
+  transform: scale(1.3);
+}
+
+.timeline-axis text {
+  fill: var(--text-muted);
+  font-size: 11px;
+  font-family: var(--font-mono);
+}
+
+.timeline-axis line,
+.timeline-axis path {
+  stroke: var(--border);
+}
+
+.timeline-tooltip {
+  position: absolute;
+  padding: 10px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  pointer-events: none;
+  z-index: 50;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  max-width: 280px;
+}
+
+.timeline-tooltip .tip-title {
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.timeline-tooltip .tip-meta {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+
+/* ===== D3 Dependency Graph Styles ===== */
+.dep-node circle {
+  stroke-width: 2;
+  transition: r 0.3s ease;
+}
+
+.dep-node text {
+  fill: var(--text-secondary);
+  font-size: 10px;
+  font-family: var(--font-mono);
+  pointer-events: none;
+}
+
+.dep-node:hover circle {
+  stroke-width: 3;
+}
+
+.dep-link {
+  stroke: var(--border);
+  stroke-opacity: 0.3;
+}
+
+/* ===== D3 Growth Chart ===== */
+.growth-area {
+  opacity: 0.7;
+}
+
+.growth-area:hover {
+  opacity: 1;
+}
+
+.growth-line {
+  fill: none;
+  stroke-width: 2;
+}
+
+/* ===== Legend ===== */
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 8px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.legend-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}

@@ -1,0 +1,18 @@
+{
+  "name": "chronocode",
+  "version": "1.0.0",
+  "description": "AI-powered Codebase Time Machine — visualize how your architecture evolved",
+  "type": "module",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js"
+  },
+  "keywords": ["git", "architecture", "visualization", "timeline", "codebase", "analysis"],
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.21.0",
+    "uuid": "^10.0.0",
+    "dotenv": "^16.4.0"
+  }
+}

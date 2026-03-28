@@ -48,7 +48,7 @@ All visualized in an interactive timeline. No more archaeology through commit me
 ## Quick Start
 
 ```bash
-git clone https://github.com/your-username/chronocode.git
+git clone https://github.com/krishnashahane/chronocode.git
 cd chronocode
 npm install
 npm start

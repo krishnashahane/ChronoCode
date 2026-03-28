@@ -13,7 +13,6 @@
   <a href="#quick-start">Quick Start</a> &bull;
   <a href="#features">Features</a> &bull;
   <a href="#how-it-works">How It Works</a> &bull;
-  <a href="#screenshots">Screenshots</a> &bull;
   <a href="#api">API</a> &bull;
   <a href="#contributing">Contributing</a>
 </p>

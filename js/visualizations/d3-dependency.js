@@ -1,112 +1,74 @@
 import { CATEGORY_COLORS } from '../utils/color-scale.js';
 
+const NS = 'http://www.w3.org/2000/svg';
+
+function svgEl(name, attrs = {}) {
+  const el = document.createElementNS(NS, name);
+  for (const [key, value] of Object.entries(attrs)) el.setAttribute(key, String(value));
+  return el;
+}
+
 export function renderDependencyGraph(container, graph) {
-  if (!graph.nodes.length) {
-    container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:300px;color:#64748b">No dependency data available</div>';
+  const nodes = Array.isArray(graph?.nodes) ? graph.nodes : [];
+  if (!nodes.length) {
+    container.textContent = 'No dependency data available';
     return;
   }
 
-  container.innerHTML = '';
-
-  const width = container.clientWidth;
+  container.replaceChildren();
+  const width = Math.max(320, container.clientWidth || 760);
   const height = 400;
+  const svg = svgEl('svg', { viewBox: `0 0 ${width} ${height}`, width, height, role: 'img', 'aria-label': 'Dependency graph' });
 
-  const svg = d3.select(container)
-    .append('svg')
-    .attr('width', width)
-    .attr('height', height);
+  const centerX = width / 2;
+  const centerY = height / 2;
+  const radius = Math.min(width, height) * 0.36;
+  const root = nodes.find(n => n.id === 'root') || nodes[0];
+  const positions = new Map();
+  positions.set(root.id, { x: centerX, y: centerY });
 
-  // Tooltip
-  const tooltip = d3.select(container)
-    .append('div')
-    .attr('class', 'timeline-tooltip')
-    .style('display', 'none');
-
-  const simulation = d3.forceSimulation(graph.nodes)
-    .force('link', d3.forceLink(graph.links).id(d => d.id).distance(80))
-    .force('charge', d3.forceManyBody().strength(-120))
-    .force('center', d3.forceCenter(width / 2, height / 2))
-    .force('collision', d3.forceCollide().radius(30));
-
-  const link = svg.append('g')
-    .selectAll('line')
-    .data(graph.links)
-    .join('line')
-    .attr('class', 'dep-link')
-    .attr('stroke', d => CATEGORY_COLORS[d.category] || '#1e293b')
-    .attr('stroke-opacity', 0.2);
-
-  const node = svg.append('g')
-    .selectAll('g')
-    .data(graph.nodes)
-    .join('g')
-    .attr('class', 'dep-node')
-    .call(d3.drag()
-      .on('start', (event, d) => {
-        if (!event.active) simulation.alphaTarget(0.3).restart();
-        d.fx = d.x;
-        d.fy = d.y;
-      })
-      .on('drag', (event, d) => {
-        d.fx = event.x;
-        d.fy = event.y;
-      })
-      .on('end', (event, d) => {
-        if (!event.active) simulation.alphaTarget(0);
-        d.fx = null;
-        d.fy = null;
-      }));
-
-  const nodeRadius = (d) => {
-    const base = 6;
-    const ageBonus = Math.min(10, d.ageDays / 60);
-    return base + ageBonus;
-  };
-
-  node.append('circle')
-    .attr('r', nodeRadius)
-    .attr('fill', d => CATEGORY_COLORS[d.category] || '#64748b')
-    .attr('stroke', d => d.isDev ? '#1e293b' : CATEGORY_COLORS[d.category] || '#64748b')
-    .attr('stroke-dasharray', d => d.isDev ? '3 2' : 'none')
-    .attr('fill-opacity', 0.7);
-
-  node.append('text')
-    .text(d => d.id.length > 14 ? d.id.slice(0, 12) + '..' : d.id)
-    .attr('dx', d => nodeRadius(d) + 4)
-    .attr('dy', 3);
-
-  node
-    .on('mouseenter', (event, d) => {
-      tooltip
-        .style('display', 'block')
-        .style('left', `${event.offsetX + 10}px`)
-        .style('top', `${event.offsetY - 10}px`)
-        .html(`
-          <div class="tip-title">${d.id}</div>
-          <div class="tip-meta">
-            ${d.version}<br>
-            Category: ${d.category}<br>
-            ${d.isDev ? 'devDependency' : 'dependency'}<br>
-            Age: ${d.ageDays} days
-          </div>
-        `);
-    })
-    .on('mouseleave', () => tooltip.style('display', 'none'));
-
-  simulation.on('tick', () => {
-    link
-      .attr('x1', d => d.source.x)
-      .attr('y1', d => d.source.y)
-      .attr('x2', d => d.target.x)
-      .attr('y2', d => d.target.y);
-    node.attr('transform', d => `translate(${d.x},${d.y})`);
+  const others = nodes.filter(n => n.id !== root.id);
+  others.forEach((node, index) => {
+    const angle = (index / Math.max(1, others.length)) * Math.PI * 2;
+    positions.set(node.id, { x: centerX + Math.cos(angle) * radius, y: centerY + Math.sin(angle) * radius });
   });
 
-  // Legend
-  const legend = d3.select(container).append('div').attr('class', 'chart-legend');
-  Object.entries(CATEGORY_COLORS).forEach(([cat, color]) => {
-    legend.append('div')
-      .attr('class', 'legend-item')
-      .html(`<div class="legend-swatch" style="background:${color}"></div>${cat}`);
-  });
+  const links = Array.isArray(graph.links) ? graph.links : [];
+  for (const link of links) {
+    const sourceId = typeof link.source === 'string' ? link.source : link.source?.id;
+    const targetId = typeof link.target === 'string' ? link.target : link.target?.id;
+    const source = positions.get(sourceId);
+    const target = positions.get(targetId);
+    if (!source || !target || sourceId === targetId) continue;
+    svg.appendChild(svgEl('line', {
+      x1: source.x, y1: source.y, x2: target.x, y2: target.y,
+      stroke: CATEGORY_COLORS[link.category] || CATEGORY_COLORS.other,
+      'stroke-opacity': 0.35,
+    }));
+  }
+
+  for (const node of nodes) {
+    const position = positions.get(node.id);
+    if (!position) continue;
+    const group = svgEl('g', { transform: `translate(${position.x},${position.y})` });
+    group.appendChild(svgEl('circle', {
+      r: node.id === 'root' ? 12 : 7,
+      fill: CATEGORY_COLORS[node.category] || CATEGORY_COLORS.other,
+      'fill-opacity': 0.8,
+      stroke: '#0f172a',
+      'stroke-width': 1.5,
+    }));
+    const label = svgEl('text', { x: node.id === 'root' ? 16 : 11, y: 4, fill: '#cbd5e1', 'font-size': 11 });
+    label.textContent = node.id === 'root' ? 'package.json' : (node.id.length > 18 ? node.id.slice(0, 16) + '…' : node.id);
+    group.appendChild(label);
+    group.addEventListener('mouseenter', () => {
+      group.setAttribute('opacity', '0.85');
+      group.appendChild(svgEl('title'));
+      group.lastChild.textContent = `${node.id} ${node.version || ''}${node.isDev ? ' (dev)' : ''}`;
+    });
+    group.addEventListener('mouseleave', () => group.setAttribute('opacity', '1'));
+    svg.appendChild(group);
+  }
+
+  container.appendChild(svg);
 }

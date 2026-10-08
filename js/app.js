@@ -114,7 +114,7 @@ function renderDashboard() {
 
   // Header meta
   $headerMeta.innerHTML = `
-    <span class="meta-badge">${state.repoName}</span>
+    <span class="meta-badge">${escapeHtml(state.repoName)}</span>
     <span class="meta-badge">${timeline.totalCommits.toLocaleString()} commits</span>
   `;
 
@@ -215,15 +215,15 @@ function renderEventCards(events) {
   container.innerHTML = sorted.map(event => `
     <div class="event-card">
       <div>
-        <span class="event-type-badge ${event.type}">${event.type}</span>
+        <span class="event-type-badge ${event.type}">${escapeHtml(event.type)}</span>
         <span class="severity-dots">
           ${Array.from({ length: 5 }, (_, i) =>
             `<span class="severity-dot ${i < event.severity ? 'active' : ''}"></span>`
           ).join('')}
         </span>
       </div>
-      <div class="event-title">${event.title}</div>
-      <div class="event-description">${event.description}</div>
+      <div class="event-title">${escapeHtml(event.title)}</div>
+      <div class="event-description">${escapeHtml(event.description)}</div>
       <div class="event-date">${formatDate(event.date)}</div>
     </div>
   `).join('');
@@ -250,7 +250,7 @@ function renderCommitList(commits) {
           <div class="commit-subject">${escapeHtml(c.subject)}</div>
           <div class="commit-meta">
             <span>${c.hash.slice(0, 7)}</span>
-            <span>${c.author.name}</span>
+            <span>${escapeHtml(c.author.name)}</span>
             <span>${timeAgo(c.date)}</span>
           </div>
         </div>
@@ -292,17 +292,17 @@ async function selectCommit(hash, commits) {
     <div class="detail-header">
       <div class="detail-subject">${escapeHtml(commit.subject)}</div>
       <div class="detail-meta-row">
-        <span class="detail-badge impact-${commit.category}">${commit.category} (${commit.impactScore})</span>
+        <span class="detail-badge impact-${commit.category}">${escapeHtml(commit.category)} (${commit.impactScore})</span>
         <span class="detail-badge additions">+${commit.metrics.totalAdditions}</span>
         <span class="detail-badge deletions">-${commit.metrics.totalDeletions}</span>
       </div>
-      <div style="margin-top:8px;font-size:0.8rem;color:#94a3b8;font-family:var(--font-mono)">
-        ${commit.hash.slice(0, 7)} by ${commit.author.name} &middot; ${formatDate(commit.date)}
+      <div class="detail-meta">
+        ${commit.hash.slice(0, 7)} by ${escapeHtml(commit.author.name)} &middot; ${formatDate(commit.date)}
       </div>
     </div>
 
     <div class="impact-meter">
-      <div style="display:flex;justify-content:space-between;font-size:0.75rem;color:#64748b">
+      <div class="impact-meter-labels">
         <span>Impact</span>
         <span>${commit.impactScore}/100</span>
       </div>
@@ -315,14 +315,14 @@ async function selectCommit(hash, commits) {
       <div class="detail-files-title">Files Changed (${commit.files.length})</div>
       ${commit.files.slice(0, 25).map(f => `
         <div class="detail-file-item">
-          <span class="detail-file-path">${f.path}</span>
+          <span class="detail-file-path">${escapeHtml(f.path)}</span>
           <div class="detail-file-changes">
             <span class="detail-file-add">+${f.additions}</span>
             <span class="detail-file-del">-${f.deletions}</span>
           </div>
         </div>
       `).join('')}
-      ${commit.files.length > 25 ? `<div style="padding:8px 0;font-size:0.75rem;color:#64748b">...and ${commit.files.length - 25} more files</div>` : ''}
+      ${commit.files.length > 25 ? `<div class="more-files">...and ${commit.files.length - 25} more files</div>` : ''}
     </div>
 
     <div class="explanation-card" id="explanation-area">
@@ -343,9 +343,9 @@ async function selectCommit(hash, commits) {
       area.innerHTML = `
         <div class="explanation-header">
           <span class="explanation-title">Analysis</span>
-          <span class="explanation-source ${explanation.source || 'heuristic'}">${explanation.source || 'heuristic'}</span>
+          <span class="explanation-source ${escapeHtml(explanation.source || 'heuristic')}">${explanation.source || 'heuristic'}</span>
         </div>
-        <div class="explanation-text">${explanation.explanation}</div>
+        <div class="explanation-text">${escapeHtml(explanation.explanation)}</div>
       `;
     }
   } catch (err) {
@@ -370,9 +370,9 @@ function renderDepTimeline(snapshots) {
     <div class="dep-snapshot">
       <div class="dep-snapshot-date">${formatDate(s.date)}</div>
       <div class="dep-changes">
-        ${s.added.map(d => `<span class="dep-change added">+ ${d.name}</span>`).join('')}
+        ${s.added.map(d => `<span class="dep-change added">+ ${escapeHtml(d.name)}</span>`).join('')}
         ${s.removed.map(d => `<span class="dep-change removed">- ${d.name}</span>`).join('')}
-        ${s.changed.map(d => `<span class="dep-change changed">${d.name} ${d.from} → ${d.to}</span>`).join('')}
+        ${s.changed.map(d => `<span class="dep-change changed">${d.name} ${escapeHtml(d.from)} → ${escapeHtml(d.to)}</span>`).join('')}
       </div>
     </div>
   `).join('');

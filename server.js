@@ -10,10 +10,14 @@ const execFileAsync = promisify(execFile);
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number.parseInt(process.env.PORT || '3000', 10);
 const HOST = process.env.HOST || '127.0.0.1';
+if (!Number.isInteger(PORT) || PORT < 1 || PORT > 65535) {
+  throw new Error('PORT must be an integer between 1 and 65535.');
+}
 const MAX_BODY = 32 * 1024;
 const MAX_COMMITS = 5000;
 const MAX_FILES_PER_COMMIT = 200;
 const SESSION_TTL_MS = 30 * 60 * 1000;
+const MAX_ACTIVE_ANALYSES = 2;
 const sessions = new Map();
 
 const MIME = {
@@ -323,7 +327,8 @@ function buildImpact(commits) {
   return commits;
 }
 
-async function analyze(repoPath) {
+async function analyze(repoPath, reportProgress = () => {}) {
+  reportProgress('parsing', 20);
   const log = await git(repoPath, [
     'log',
     '--all',
@@ -335,9 +340,13 @@ async function analyze(repoPath) {
   const commits = parseLog(log);
   if (!commits.length) throw new Error('No commits were found in the repository.');
 
+  reportProgress('analyzing_impact', 50);
   buildImpact(commits);
+  reportProgress('building_timeline', 65);
   const timeline = buildTimeline(commits);
+  reportProgress('tracking_dependencies', 80);
   const deps = await buildDependencies(repoPath, commits);
+  reportProgress('complete', 100);
   return { commits, timeline, deps };
 }
 
@@ -359,6 +368,9 @@ async function handle(req, res) {
   if (req.method === 'POST' && url.pathname === '/api/repo/analyze') {
     try {
       const body = await readJson(req);
+      if ([...sessions.values()].filter((session) => session.status !== 'complete' && session.status !== 'error').length >= MAX_ACTIVE_ANALYSES) {
+        return send(res, 429, { error: 'Too many analyses are running. Please wait for a current analysis to finish.' });
+      }
       const repoPath = await validateRepo(body.path);
       const sessionId = crypto.randomUUID();
 
@@ -372,7 +384,9 @@ async function handle(req, res) {
       setImmediate(async () => {
         try {
           sessions.set(sessionId, { ...sessions.get(sessionId), status: 'parsing', progress: 20 });
-          const data = await analyze(repoPath);
+          const data = await analyze(repoPath, (status, progress) => {
+            sessions.set(sessionId, { ...sessions.get(sessionId), status, progress });
+          });
           sessions.set(sessionId, {
             createdAt: Date.now(),
             status: 'complete',

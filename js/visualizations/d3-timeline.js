@@ -1,4 +1,4 @@
-import { getColor, COLORS } from '../utils/color-scale.js';
+import { COLORS } from '../utils/color-scale.js';
 import { formatDate, formatNumber } from '../utils/date-utils.js';
 
 const EVENT_COLORS = {
@@ -8,158 +8,118 @@ const EVENT_COLORS = {
   milestone: COLORS.emerald,
 };
 
+const NS = 'http://www.w3.org/2000/svg';
+
+function svgEl(name, attrs = {}) {
+  const el = document.createElementNS(NS, name);
+  for (const [key, value] of Object.entries(attrs)) el.setAttribute(key, String(value));
+  return el;
+}
+
+function showTooltip(container, content, x, y) {
+  let tooltip = container.querySelector('.timeline-tooltip');
+  if (!tooltip) {
+    tooltip = document.createElement('div');
+    tooltip.className = 'timeline-tooltip';
+    container.appendChild(tooltip);
+  }
+  tooltip.textContent = content;
+  tooltip.style.display = 'block';
+  tooltip.style.left = `${x + 10}px`;
+  tooltip.style.top = `${y - 10}px`;
+}
+
+function hideTooltip(container) {
+  const tooltip = container.querySelector('.timeline-tooltip');
+  if (tooltip) tooltip.style.display = 'none';
+}
+
 export function renderTimeline(container, data) {
-  const { timeline, events } = data;
+  const timeline = Array.isArray(data.timeline) ? data.timeline : [];
+  const events = Array.isArray(data.events) ? data.events : [];
   if (!timeline.length) {
-    container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:300px;color:#64748b">No timeline data available</div>';
+    container.textContent = 'No timeline data available';
     return;
   }
 
-  container.innerHTML = '';
+  container.replaceChildren();
+  const margin = { top: 24, right: 20, bottom: 58, left: 56 };
+  const width = Math.max(320, container.clientWidth || 760);
+  const chartWidth = width - margin.left - margin.right;
+  const height = 320;
+  const chartHeight = height - margin.top - margin.bottom;
+  const svg = svgEl('svg', { viewBox: `0 0 ${width} ${height}`, width, height, role: 'img', 'aria-label': 'Commit timeline' });
+  const g = svgEl('g', { transform: `translate(${margin.left},${margin.top})` });
+  svg.appendChild(g);
 
-  const margin = { top: 30, right: 30, bottom: 60, left: 60 };
-  const width = container.clientWidth - margin.left - margin.right;
-  const height = 340 - margin.top - margin.bottom;
+  const times = timeline.map(d => Date.parse(d.startDate));
+  const minT = Math.min(...times);
+  const maxT = Math.max(...times, minT + 1);
+  const maxCommits = Math.max(1, ...timeline.map(d => Number(d.commitCount) || 0));
+  const x = (value) => ((value - minT) / (maxT - minT)) * chartWidth;
+  const y = (value) => chartHeight - (value / maxCommits) * chartHeight;
+  const barWidth = Math.max(3, chartWidth / timeline.length - 2);
 
-  const svg = d3.select(container)
-    .append('svg')
-    .attr('width', width + margin.left + margin.right)
-    .attr('height', height + margin.top + margin.bottom);
+  const axis = svgEl('line', { x1: 0, y1: chartHeight, x2: chartWidth, y2: chartHeight, stroke: '#334155' });
+  g.appendChild(axis);
 
-  const g = svg.append('g')
-    .attr('transform', `translate(${margin.left},${margin.top})`);
+  for (let i = 0; i < 5; i += 1) {
+    const value = (maxCommits / 4) * i;
+    const yy = y(value);
+    g.appendChild(svgEl('line', { x1: 0, y1: yy, x2: chartWidth, y2: yy, stroke: '#1e293b' }));
+    const label = svgEl('text', { x: -8, y: yy + 4, 'text-anchor': 'end', fill: '#64748b', 'font-size': 11 });
+    label.textContent = formatNumber(Math.round(value));
+    g.appendChild(label);
+  }
 
-  // Scales
-  const x = d3.scaleTime()
-    .domain([new Date(timeline[0].startDate), new Date(timeline[timeline.length - 1].endDate)])
-    .range([0, width]);
-
-  const maxCommits = d3.max(timeline, d => d.commitCount) || 1;
-  const y = d3.scaleLinear()
-    .domain([0, maxCommits])
-    .range([height, 0]);
-
-  // Axes
-  g.append('g')
-    .attr('class', 'timeline-axis')
-    .attr('transform', `translate(0,${height})`)
-    .call(d3.axisBottom(x).ticks(Math.min(timeline.length, 12)).tickFormat(d3.timeFormat('%b %Y')))
-    .selectAll('text')
-    .attr('transform', 'rotate(-40)')
-    .style('text-anchor', 'end');
-
-  g.append('g')
-    .attr('class', 'timeline-axis')
-    .call(d3.axisLeft(y).ticks(5));
-
-  // Y-axis label
-  g.append('text')
-    .attr('transform', 'rotate(-90)')
-    .attr('y', -45)
-    .attr('x', -height / 2)
-    .attr('text-anchor', 'middle')
-    .attr('fill', '#64748b')
-    .attr('font-size', '11px')
-    .text('Commits');
-
-  // Bars
-  const barWidth = Math.max(2, (width / timeline.length) - 2);
-
-  // Tooltip
-  const tooltip = d3.select(container)
-    .append('div')
-    .attr('class', 'timeline-tooltip')
-    .style('display', 'none');
-
-  g.selectAll('.timeline-bar')
-    .data(timeline)
-    .join('rect')
-    .attr('class', 'timeline-bar')
-    .attr('x', d => x(new Date(d.startDate)))
-    .attr('y', d => y(d.commitCount))
-    .attr('width', barWidth)
-    .attr('height', d => height - y(d.commitCount))
-    .attr('rx', 2)
-    .attr('fill', (d, i) => {
-      const hasNewDirs = d.newDirs.length > 0;
-      return hasNewDirs ? COLORS.purple : COLORS.blue;
-    })
-    .on('mouseenter', (event, d) => {
-      tooltip
-        .style('display', 'block')
-        .style('left', `${event.offsetX + 10}px`)
-        .style('top', `${event.offsetY - 10}px`)
-        .html(`
-          <div class="tip-title">${formatDate(d.startDate)} - ${formatDate(d.endDate)}</div>
-          <div class="tip-meta">
-            ${d.commitCount} commits | +${formatNumber(d.totalAdditions)} / -${formatNumber(d.totalDeletions)}<br>
-            ${d.fileCount} files | ${d.topDirCount} directories
-            ${d.newDirs.length ? '<br>New: ' + d.newDirs.join(', ') : ''}
-          </div>
-        `);
-    })
-    .on('mouseleave', () => tooltip.style('display', 'none'));
-
-  // LOC line overlay (secondary y-axis)
-  const maxLoc = d3.max(timeline, d => d.totalAdditions + d.totalDeletions) || 1;
-  const yLoc = d3.scaleLinear().domain([0, maxLoc]).range([height, 0]);
-
-  const line = d3.line()
-    .x(d => x(new Date(d.startDate)) + barWidth / 2)
-    .y(d => yLoc(d.totalAdditions + d.totalDeletions))
-    .curve(d3.curveMonotoneX);
-
-  g.append('path')
-    .datum(timeline)
-    .attr('fill', 'none')
-    .attr('stroke', COLORS.cyan)
-    .attr('stroke-width', 2)
-    .attr('stroke-opacity', 0.6)
-    .attr('d', line);
-
-  // Event markers
-  const filteredEvents = events.filter(e => e.severity >= 3);
-  const eventMarkers = g.selectAll('.timeline-event-marker')
-    .data(filteredEvents)
-    .join('g')
-    .attr('class', 'timeline-event-marker')
-    .attr('transform', d => `translate(${x(new Date(d.date))},${-8})`);
-
-  eventMarkers.append('polygon')
-    .attr('points', '0,-8 5,0 -5,0')
-    .attr('fill', d => EVENT_COLORS[d.type] || COLORS.blue);
-
-  eventMarkers.append('line')
-    .attr('y1', 0)
-    .attr('y2', height + 8)
-    .attr('stroke', d => EVENT_COLORS[d.type] || COLORS.blue)
-    .attr('stroke-width', 1)
-    .attr('stroke-dasharray', '3 3')
-    .attr('stroke-opacity', 0.4);
-
-  eventMarkers
-    .on('mouseenter', (event, d) => {
-      tooltip
-        .style('display', 'block')
-        .style('left', `${event.offsetX + 10}px`)
-        .style('top', `${event.offsetY - 10}px`)
-        .html(`
-          <div class="tip-title">${d.title}</div>
-          <div class="tip-meta">${d.description}<br>${formatDate(d.date)}</div>
-        `);
-    })
-    .on('mouseleave', () => tooltip.style('display', 'none'));
-
-  // Legend
-  const legend = d3.select(container).append('div').attr('class', 'chart-legend');
-  [
-    { color: COLORS.blue, label: 'Commits' },
-    { color: COLORS.purple, label: 'Commits (new dirs)' },
-    { color: COLORS.cyan, label: 'Lines changed' },
-    ...Object.entries(EVENT_COLORS).map(([k, v]) => ({ color: v, label: k })),
-  ].forEach(({ color, label }) => {
-    legend.append('div')
-      .attr('class', 'legend-item')
-      .html(`<div class="legend-swatch" style="background:${color}"></div>${label}`);
+  timeline.forEach((item) => {
+    const px = x(Date.parse(item.startDate));
+    const py = y(Number(item.commitCount) || 0);
+    const rect = svgEl('rect', {
+      x: px, y: py, width: barWidth, height: Math.max(0, chartHeight - py), rx: 2,
+      fill: item.newDirs?.length ? COLORS.purple : COLORS.blue,
+    });
+    rect.addEventListener('mouseenter', (event) => {
+      showTooltip(
+        container,
+        `${formatDate(item.startDate)} - ${formatDate(item.endDate)} | ${item.commitCount} commits | +${formatNumber(item.totalAdditions)} / -${formatNumber(item.totalDeletions)} | ${item.fileCount} files`,
+        event.offsetX, event.offsetY
+      );
+    });
+    rect.addEventListener('mouseleave', () => hideTooltip(container));
+    g.appendChild(rect);
   });
+
+  const maxLoc = Math.max(1, ...timeline.map(d => (Number(d.totalAdditions) || 0) + (Number(d.totalDeletions) || 0)));
+  let pathData = '';
+  timeline.forEach((item, index) => {
+    const px = x(Date.parse(item.startDate)) + barWidth / 2;
+    const py = chartHeight - (((Number(item.totalAdditions) || 0) + (Number(item.totalDeletions) || 0)) / maxLoc) * chartHeight;
+    pathData += (index ? ' L ' : 'M ') + px + ' ' + py;
+  });
+  g.appendChild(svgEl('path', { d: pathData, fill: 'none', stroke: COLORS.cyan, 'stroke-width': 2, 'stroke-opacity': 0.7 }));
+
+  events.filter(e => Number(e.severity) >= 3).forEach((eventData) => {
+    const px = x(Date.parse(eventData.date));
+    const group = svgEl('g', { transform: `translate(${px},0)` });
+    group.appendChild(svgEl('line', { x1: 0, y1: 0, x2: 0, y2: chartHeight, stroke: EVENT_COLORS[eventData.type] || COLORS.blue, 'stroke-dasharray': '3 3', 'stroke-opacity': 0.35 }));
+    group.appendChild(svgEl('circle', { cx: 0, cy: 4, r: 4, fill: EVENT_COLORS[eventData.type] || COLORS.blue }));
+    group.addEventListener('mouseenter', (event) => showTooltip(container, `${eventData.title}: ${eventData.description}`, event.offsetX, event.offsetY));
+    group.addEventListener('mouseleave', () => hideTooltip(container));
+    g.appendChild(group);
+  });
+
+  timeline.forEach((item, index) => {
+    if (index % Math.max(1, Math.ceil(timeline.length / 8)) !== 0) return;
+    const px = x(Date.parse(item.startDate));
+    const label = svgEl('text', { x: px, y: chartHeight + 42, 'text-anchor': 'end', fill: '#64748b', 'font-size': 10, transform: `rotate(-40 ${px} ${chartHeight + 42})` });
+    label.textContent = formatDate(item.startDate);
+    g.appendChild(label);
+  });
+
+  const yLabel = svgEl('text', { transform: 'rotate(-90)', x: -chartHeight / 2, y: -40, 'text-anchor': 'middle', fill: '#64748b', 'font-size': 11 });
+  yLabel.textContent = 'Commits';
+  g.appendChild(yLabel);
+
+  container.appendChild(svg);
 }

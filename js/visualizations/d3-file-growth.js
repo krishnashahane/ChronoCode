@@ -1,148 +1,78 @@
-import { getColor, COLORS } from '../utils/color-scale.js';
+import { COLORS } from '../utils/color-scale.js';
 import { formatDate, formatNumber } from '../utils/date-utils.js';
 
+const NS = 'http://www.w3.org/2000/svg';
+
+function svgEl(name, attrs = {}) {
+  const el = document.createElementNS(NS, name);
+  for (const [key, value] of Object.entries(attrs)) el.setAttribute(key, String(value));
+  return el;
+}
+
 export function renderFileGrowth(container, timeline) {
-  if (!timeline.length) {
-    container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:300px;color:#64748b">No growth data available</div>';
+  if (!Array.isArray(timeline) || !timeline.length) {
+    container.textContent = 'No growth data available';
     return;
   }
 
-  container.innerHTML = '';
+  container.replaceChildren();
+  const margin = { top: 20, right: 20, bottom: 58, left: 58 };
+  const width = Math.max(320, container.clientWidth || 760);
+  const height = 320;
+  const chartWidth = width - margin.left - margin.right;
+  const chartHeight = height - margin.top - margin.bottom;
+  const times = timeline.map(d => Date.parse(d.startDate));
+  const minT = Math.min(...times);
+  const maxT = Math.max(...times, minT + 1);
+  const maxFiles = Math.max(1, ...timeline.map(d => Number(d.fileCount) || 0));
+  const x = (v) => ((v - minT) / (maxT - minT)) * chartWidth;
+  const y = (v) => chartHeight - (v / maxFiles) * chartHeight;
 
-  const margin = { top: 30, right: 30, bottom: 60, left: 60 };
-  const width = container.clientWidth - margin.left - margin.right;
-  const height = 340 - margin.top - margin.bottom;
+  const svg = svgEl('svg', { viewBox: `0 0 ${width} ${height}`, width, height, role: 'img', 'aria-label': 'Codebase growth' });
+  const g = svgEl('g', { transform: `translate(${margin.left},${margin.top})` });
+  svg.appendChild(g);
 
-  const svg = d3.select(container)
-    .append('svg')
-    .attr('width', width + margin.left + margin.right)
-    .attr('height', height + margin.top + margin.bottom);
-
-  const g = svg.append('g')
-    .attr('transform', `translate(${margin.left},${margin.top})`);
-
-  // Tooltip
-  const tooltip = d3.select(container)
-    .append('div')
-    .attr('class', 'timeline-tooltip')
-    .style('display', 'none');
-
-  const x = d3.scaleTime()
-    .domain([new Date(timeline[0].startDate), new Date(timeline[timeline.length - 1].endDate)])
-    .range([0, width]);
-
-  // File count area
-  const maxFiles = d3.max(timeline, d => d.fileCount) || 1;
-  const yFiles = d3.scaleLinear().domain([0, maxFiles]).range([height, 0]);
-
-  const area = d3.area()
-    .x(d => x(new Date(d.startDate)))
-    .y0(height)
-    .y1(d => yFiles(d.fileCount))
-    .curve(d3.curveMonotoneX);
-
-  const gradient = svg.append('defs')
-    .append('linearGradient')
-    .attr('id', 'growthGradient')
-    .attr('x1', '0%').attr('y1', '0%')
-    .attr('x2', '0%').attr('y2', '100%');
-
-  gradient.append('stop').attr('offset', '0%').attr('stop-color', COLORS.purple).attr('stop-opacity', 0.4);
-  gradient.append('stop').attr('offset', '100%').attr('stop-color', COLORS.purple).attr('stop-opacity', 0.05);
-
-  g.append('path')
-    .datum(timeline)
-    .attr('fill', 'url(#growthGradient)')
-    .attr('d', area);
-
-  g.append('path')
-    .datum(timeline)
-    .attr('fill', 'none')
-    .attr('stroke', COLORS.purple)
-    .attr('stroke-width', 2)
-    .attr('d', d3.line()
-      .x(d => x(new Date(d.startDate)))
-      .y(d => yFiles(d.fileCount))
-      .curve(d3.curveMonotoneX));
-
-  // LOC delta bars (secondary)
-  const maxDelta = d3.max(timeline, d => Math.abs(d.locDelta)) || 1;
-  const yDelta = d3.scaleLinear()
-    .domain([-maxDelta, maxDelta])
-    .range([height, 0]);
-
-  const barWidth = Math.max(2, (width / timeline.length) - 2);
-
-  g.selectAll('.delta-bar')
-    .data(timeline)
-    .join('rect')
-    .attr('x', d => x(new Date(d.startDate)))
-    .attr('y', d => d.locDelta >= 0 ? yDelta(d.locDelta) : yDelta(0))
-    .attr('width', barWidth)
-    .attr('height', d => Math.abs(yDelta(d.locDelta) - yDelta(0)))
-    .attr('rx', 1)
-    .attr('fill', d => d.locDelta >= 0 ? COLORS.emerald : COLORS.red)
-    .attr('opacity', 0.25);
-
-  // Axes
-  g.append('g')
-    .attr('class', 'timeline-axis')
-    .attr('transform', `translate(0,${height})`)
-    .call(d3.axisBottom(x).ticks(Math.min(timeline.length, 10)).tickFormat(d3.timeFormat('%b %Y')))
-    .selectAll('text')
-    .attr('transform', 'rotate(-40)')
-    .style('text-anchor', 'end');
-
-  g.append('g')
-    .attr('class', 'timeline-axis')
-    .call(d3.axisLeft(yFiles).ticks(5));
-
-  g.append('text')
-    .attr('transform', 'rotate(-90)')
-    .attr('y', -45)
-    .attr('x', -height / 2)
-    .attr('text-anchor', 'middle')
-    .attr('fill', '#64748b')
-    .attr('font-size', '11px')
-    .text('File count');
-
-  // Interactive dots
-  g.selectAll('.growth-dot')
-    .data(timeline)
-    .join('circle')
-    .attr('cx', d => x(new Date(d.startDate)))
-    .attr('cy', d => yFiles(d.fileCount))
-    .attr('r', 4)
-    .attr('fill', COLORS.purple)
-    .attr('stroke', '#06080f')
-    .attr('stroke-width', 2)
-    .style('cursor', 'pointer')
-    .on('mouseenter', (event, d) => {
-      tooltip
-        .style('display', 'block')
-        .style('left', `${event.offsetX + 10}px`)
-        .style('top', `${event.offsetY - 10}px`)
-        .html(`
-          <div class="tip-title">${formatDate(d.startDate)}</div>
-          <div class="tip-meta">
-            Files: ${formatNumber(d.fileCount)}<br>
-            LOC delta: ${d.locDelta >= 0 ? '+' : ''}${formatNumber(d.locDelta)}<br>
-            Commits: ${d.commitCount}<br>
-            Dirs: ${d.topDirCount}
-          </div>
-        `);
-    })
-    .on('mouseleave', () => tooltip.style('display', 'none'));
-
-  // Legend
-  const legend = d3.select(container).append('div').attr('class', 'chart-legend');
-  [
-    { color: COLORS.purple, label: 'File count' },
-    { color: COLORS.emerald, label: 'Lines added' },
-    { color: COLORS.red, label: 'Lines removed' },
-  ].forEach(({ color, label }) => {
-    legend.append('div')
-      .attr('class', 'legend-item')
-      .html(`<div class="legend-swatch" style="background:${color}"></div>${label}`);
+  const points = timeline.map(d => [x(Date.parse(d.startDate)), y(Number(d.fileCount) || 0)]);
+  let area = `M 0 ${chartHeight}`;
+  let line = '';
+  points.forEach(([px, py], i) => {
+    area += ` L ${px} ${py}`;
+    line += (i ? ' L ' : 'M ') + px + ' ' + py;
   });
+  area += ` L ${chartWidth} ${chartHeight} Z`;
+  g.appendChild(svgEl('path', { d: area, fill: COLORS.purple, 'fill-opacity': 0.12 }));
+  g.appendChild(svgEl('path', { d: line, fill: 'none', stroke: COLORS.purple, 'stroke-width': 2 }));
+
+  const maxDelta = Math.max(1, ...timeline.map(d => Math.abs(Number(d.locDelta) || 0)));
+  timeline.forEach((item) => {
+    const px = x(Date.parse(item.startDate));
+    const delta = Number(item.locDelta) || 0;
+    const zeroY = chartHeight;
+    const barY = delta >= 0 ? chartHeight - (delta / maxDelta) * (chartHeight / 3) : zeroY;
+    const barH = Math.abs(delta / maxDelta) * (chartHeight / 3);
+    g.appendChild(svgEl('rect', { x: px, y: barY, width: Math.max(2, chartWidth / timeline.length - 2), height: barH, fill: delta >= 0 ? COLORS.emerald : COLORS.red, 'fill-opacity': 0.25 }));
+  });
+
+  for (let i = 0; i < 5; i += 1) {
+    const value = (maxFiles / 4) * i;
+    const yy = y(value);
+    g.appendChild(svgEl('line', { x1: 0, y1: yy, x2: chartWidth, y2: yy, stroke: '#1e293b' }));
+    const label = svgEl('text', { x: -8, y: yy + 4, 'text-anchor': 'end', fill: '#64748b', 'font-size': 11 });
+    label.textContent = formatNumber(Math.round(value));
+    g.appendChild(label);
+  }
+
+  timeline.forEach((item, index) => {
+    if (index % Math.max(1, Math.ceil(timeline.length / 8)) !== 0) return;
+    const px = x(Date.parse(item.startDate));
+    const label = svgEl('text', { x: px, y: chartHeight + 42, 'text-anchor': 'end', fill: '#64748b', 'font-size': 10, transform: `rotate(-40 ${px} ${chartHeight + 42})` });
+    label.textContent = formatDate(item.startDate);
+    g.appendChild(label);
+  });
+
+  const yLabel = svgEl('text', { transform: 'rotate(-90)', x: -chartHeight / 2, y: -40, 'text-anchor': 'middle', fill: '#64748b', 'font-size': 11 });
+  yLabel.textContent = 'File count';
+  g.appendChild(yLabel);
+
+  container.appendChild(svg);
 }

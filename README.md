@@ -91,6 +91,7 @@ The visualization filenames remain for compatibility with the existing project l
 ## Analysis limits
 
 - Maximum 5,000 commits per analysis session.
+- Maximum 2 analyses run concurrently.
 - Maximum 200 changed files retained per commit.
 - Dependency history samples the 30 most recent `package.json` changes.
 

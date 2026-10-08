@@ -13,10 +13,6 @@ export const COLORS = {
 
 const PALETTE = Object.values(COLORS);
 
-export function getColor(index) {
-  return PALETTE[index % PALETTE.length];
-}
-
 export const CATEGORY_COLORS = {
   framework: COLORS.purple,
   testing: COLORS.emerald,

@@ -26,7 +26,7 @@ const MIME = {
 };
 
 function send(res, status, body, type = 'application/json; charset=utf-8') {
-  const payload = typeof body === 'string' ? body : JSON.stringify(body);
+  const payload = Buffer.isBuffer(body) ? body : (typeof body === 'string' ? body : JSON.stringify(body));
   res.writeHead(status, {
     'Content-Type': type,
     'Content-Length': Buffer.byteLength(payload),
